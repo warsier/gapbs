@@ -1,61 +1,26 @@
 # See LICENSE.txt for license details.
-LLVM_HOME = /usr/lib/llvm-7
-CXX = $(LLVM_HOME)/bin/clang++
-OPT = $(LLVM_HOME)/bin/opt
-# CXX = clang++-7
-# OPT = opt-7
-PAR_FLAG = -fopenmp
-CXX_FLAGS += -std=c++11 -fPIC -O3  $(PAR_FLAG)
-EMITBC_CXX_FLAGS = $(CXX_FLAGS) -flto
+CXX = /usr/bin/clang++-7
+OPT = /usr/bin/opt-7
+PIMPROF_ROOT = /home/warsier/Documents/PIMProf/
+
+CXX_FLAGS = -std=c++11 -O3 -Wall -fopenmp -g -march=skylake-avx512
+CXX_INJ_FLAGS = $(CXX_FLAGS) -Xclang -load -Xclang $(PIMPROF_ROOT)/build/LLVMAnalysis/libAnnotationInjection.so
+CXX_OFF_FLAGS += $(CXX_FLAGS) -Xclang -load -Xclang $(PIMPROF_ROOT)/build/LLVMAnalysis/libAnnotationInjection.so -Xclang -decision=$(@:.ll=_23.decision.out) 
+LD_FLAGS = -L$(PIMPROF_ROOT)/build/LLVMAnalysis -Wl,-rpath=$(PIMPROF_ROOT)/build/LLVMAnalysis -lPIMProfAnnotation
 
 KERNELS = bc bfs cc cc_sv pr sssp tc
 SUITE = $(KERNELS) converter
-TESTING = 
-#	for i in $$(SUITE) ; do \
-#		TESTING = $$(TESTING) $$(i).greedy.test $$(i).offload.test $$(i).cpu.test $$(i).pim.test; \
-#	done 
+SUITE_LL = $(SUITE:=.ll)
 
-.PHONY: all testing
-all: $(SUITE) $(TESTING)
+.PHONY: all
+all: $(SUITE) $(SUITE_LL)
 
-testing: bfs.greedy.test bfs.offload.test bfs.cpu.test bfs.pim.test
-out: $(addsuffix .out,$(KERNELS))
+% : src/%.cc src/*.h
+	$(CXX) $(CXX_INJ_FLAGS) $< -o $@ $(LD_FLAGS)
 
-%.greedy.test : %.greedy.bc ../PIMProf/TestCase/PIMProfOffloader.bc
-	$(CXX) $(CXX_FLAGS) $^ -o $@
-
-%.offload.test : %.offload.bc ../PIMProf/TestCase/PIMProfOffloader.bc
-	$(CXX) $(CXX_FLAGS) $^ -o $@
-
-%.cpu.test : %.cpu.bc ../PIMProf/TestCase/PIMProfOffloader.bc
-	$(CXX) $(CXX_FLAGS) $^ -o $@
-
-%.pim.test : %.pim.bc ../PIMProf/TestCase/PIMProfOffloader.bc
-	$(CXX) $(CXX_FLAGS) $^ -o $@
-
-% : %.out.bc ../PIMProf/TestCase/PIMProfAnnotator.bc
-	$(CXX) $(CXX_FLAGS) $^ -o $@
-
-%.out.bc: src/%.cc src/*.h
-	$(CXX) $(EMITBC_CXX_FLAGS) -c $< -o $@
-	$(OPT) -load ../PIMProf/build/LLVMAnalysis/libAnnotatorInjection.so -AnnotatorInjection $@ -o $@
-	../PIMProf/build/LLVMAnalysis/CFGDump.exe $@ -o basicblock.out
-
-%.greedy.bc: src/%.cc src/*.h
-	$(CXX) $(EMITBC_CXX_FLAGS) -c $< -o $@
-	$(OPT) -load ../PIMProf/build/LLVMAnalysis/libOffloaderInjection.so -OffloaderInjection $@ -o $@ -decision=greedy_decision.txt > /dev/null
-
-%.offload.bc: src/%.cc src/*.h
-	$(CXX) $(EMITBC_CXX_FLAGS) -c $< -o $@
-	$(OPT) -load ../PIMProf/build/LLVMAnalysis/libOffloaderInjection.so -OffloaderInjection $@ -o $@ -decision=offload_decision.txt > instruction_dump.ll
-
-%.cpu.bc: src/%.cc src/*.h
-	$(CXX) $(EMITBC_CXX_FLAGS) -c $< -o $@
-	$(OPT) -load ../PIMProf/build/LLVMAnalysis/libOffloaderInjection.so -OffloaderInjection $@ -o $@ -CPU > /dev/null
-
-%.pim.bc: src/%.cc src/*.h
-	$(CXX) $(EMITBC_CXX_FLAGS) -c $< -o $@
-	$(OPT) -load ../PIMProf/build/LLVMAnalysis/libOffloaderInjection.so -OffloaderInjection $@ -o $@ -PIM > /dev/null
+%.ll : src/%.cc src/*.h
+	$(CXX) $(CXX_INJ_FLAGS) -S -emit-llvm -o $@ $<
+	$(OPT) -load $(PIMPROF_ROOT)/build/LLVMAnalysis/libOffloaderInjection.so -OffloaderInjection -decision=$(@:.ll=.decision_23.out) -S $@ -o $@ > $(@:.ll=.dump) 2>&1
 
 # Testing
 include test/test.mk
@@ -66,4 +31,4 @@ include benchmark/bench.mk
 
 .PHONY: clean
 clean:
-	rm -f $(SUITE) test/out/* *.out *.bc *.test
+	rm -f $(SUITE) $(SUITE:=.ll) test/out/*
