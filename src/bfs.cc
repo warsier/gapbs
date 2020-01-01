@@ -49,6 +49,9 @@ int64_t BUStep(const Graph &g, pvector<NodeID> &parent, Bitmap &front,
   next.reset();
   #pragma omp parallel for reduction(+ : awake_count) schedule(dynamic, 1024)
   for (NodeID u=0; u < g.num_nodes(); u++) {
+#ifdef ZSIM
+  PIMPROF_BEGIN_REG_PARALLEL
+#endif
     if (parent[u] < 0) {
       for (NodeID v : g.in_neigh(u)) {
         if (front.get_bit(v)) {
@@ -59,6 +62,9 @@ int64_t BUStep(const Graph &g, pvector<NodeID> &parent, Bitmap &front,
         }
       }
     }
+#ifdef ZSIM
+  PIMPROF_END_REG_PARALLEL
+#endif
   }
   return awake_count;
 }
@@ -69,9 +75,13 @@ int64_t TDStep(const Graph &g, pvector<NodeID> &parent,
   int64_t scout_count = 0;
   #pragma omp parallel
   {
+#ifdef ZSIM
+  PIMPROF_BEGIN_REG_PARALLEL
+#endif
     QueueBuffer<NodeID> lqueue(queue);
     #pragma omp for reduction(+ : scout_count)
     for (auto q_iter = queue.begin(); q_iter < queue.end(); q_iter++) {
+
       NodeID u = *q_iter;
       for (NodeID v : g.out_neigh(u)) {
         NodeID curr_val = parent[v];
@@ -84,6 +94,9 @@ int64_t TDStep(const Graph &g, pvector<NodeID> &parent,
       }
     }
     lqueue.flush();
+#ifdef ZSIM
+  PIMPROF_END_REG_PARALLEL
+#endif
   }
   return scout_count;
 }
@@ -92,8 +105,14 @@ int64_t TDStep(const Graph &g, pvector<NodeID> &parent,
 void QueueToBitmap(const SlidingQueue<NodeID> &queue, Bitmap &bm) {
   #pragma omp parallel for
   for (auto q_iter = queue.begin(); q_iter < queue.end(); q_iter++) {
+#ifdef ZSIM
+  PIMPROF_BEGIN_REG_PARALLEL
+#endif
     NodeID u = *q_iter;
     bm.set_bit_atomic(u);
+#ifdef ZSIM
+  PIMPROF_END_REG_PARALLEL
+#endif
   }
 }
 
@@ -101,12 +120,18 @@ void BitmapToQueue(const Graph &g, const Bitmap &bm,
                    SlidingQueue<NodeID> &queue) {
   #pragma omp parallel
   {
+#ifdef ZSIM
+  PIMPROF_BEGIN_REG_PARALLEL
+#endif
     QueueBuffer<NodeID> lqueue(queue);
     #pragma omp for
     for (NodeID n=0; n < g.num_nodes(); n++)
       if (bm.get_bit(n))
         lqueue.push_back(n);
     lqueue.flush();
+#ifdef ZSIM
+  PIMPROF_END_REG_PARALLEL
+#endif
   }
   queue.slide_window();
 }
@@ -242,6 +267,9 @@ bool BFSVerifier(const Graph &g, NodeID source,
 
 
 int main(int argc, char* argv[]) {
+#ifdef ZSIM
+  PIMPROF_BEGIN_PROGRAM
+#endif
   CLApp cli(argc, argv, "breadth-first search");
   if (!cli.ParseArgs())
     return -1;
@@ -254,5 +282,8 @@ int main(int argc, char* argv[]) {
     return BFSVerifier(g, vsp.PickNext(), parent);
   };
   BenchmarkKernel(cli, g, BFSBound, PrintBFSStats, VerifierBound);
+#ifdef ZSIM
+  PIMPROF_END_PROGRAM
+#endif
   return 0;
 }

@@ -66,6 +66,9 @@ void PBFS(const Graph &g, NodeID source, pvector<NodeID> &path_counts,
       depth++;
       #pragma omp for schedule(dynamic, 64)
       for (auto q_iter = queue.begin(); q_iter < queue.end(); q_iter++) {
+#ifdef ZSIM
+  PIMPROF_BEGIN_REG_PARALLEL
+#endif
         NodeID u = *q_iter;
         for (NodeID &v : g.out_neigh(u)) {
           if ((depths[v] == -1) &&
@@ -77,6 +80,9 @@ void PBFS(const Graph &g, NodeID source, pvector<NodeID> &path_counts,
             fetch_and_add(path_counts[v], path_counts[u]);
           }
         }
+#ifdef ZSIM
+  PIMPROF_END_REG_PARALLEL
+#endif
       }
       lqueue.flush();
       #pragma omp barrier
@@ -116,6 +122,9 @@ pvector<ScoreT> Brandes(const Graph &g, SourcePicker<Graph> &sp,
     for (int d=depth_index.size()-2; d >= 0; d--) {
       #pragma omp parallel for schedule(dynamic, 64)
       for (auto it = depth_index[d]; it < depth_index[d+1]; it++) {
+#ifdef ZSIM
+  PIMPROF_BEGIN_REG_PARALLEL
+#endif
         NodeID u = *it;
         ScoreT delta_u = 0;
         for (NodeID &v : g.out_neigh(u)) {
@@ -126,6 +135,9 @@ pvector<ScoreT> Brandes(const Graph &g, SourcePicker<Graph> &sp,
         }
         deltas[u] = delta_u;
         scores[u] += delta_u;
+#ifdef ZSIM
+  PIMPROF_END_REG_PARALLEL
+#endif
       }
     }
     t.Stop();
@@ -223,6 +235,9 @@ bool BCVerifier(const Graph &g, SourcePicker<Graph> &sp, NodeID num_iters,
 
 
 int main(int argc, char* argv[]) {
+#ifdef ZSIM
+  PIMPROF_BEGIN_PROGRAM
+#endif
   CLIterApp cli(argc, argv, "betweenness-centrality", 1);
   if (!cli.ParseArgs())
     return -1;
@@ -239,5 +254,8 @@ int main(int argc, char* argv[]) {
     return BCVerifier(g, vsp, cli.num_iters(), scores);
   };
   BenchmarkKernel(cli, g, BCBound, PrintTopScores, VerifierBound);
+#ifdef ZSIM
+  PIMPROF_END_PROGRAM
+#endif
   return 0;
 }

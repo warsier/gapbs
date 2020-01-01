@@ -13,6 +13,10 @@
 #include "pvector.h"
 #include "util.h"
 
+#ifdef ZSIM
+#include "zsimhooks.h"
+#endif
+
 
 /*
 GAP Benchmark Suite
@@ -235,8 +239,15 @@ class CSRGraph {
     NodeID_ length = offsets.size();
     DestID_** index = new DestID_*[length];
     #pragma omp parallel for
-    for (NodeID_ n=0; n < length; n++)
+    for (NodeID_ n=0; n < length; n++) {
+#ifdef ZSIM
+  PIMPROF_BEGIN_REG_PARALLEL
+#endif
       index[n] = neighs + offsets[n];
+#ifdef ZSIM
+  PIMPROF_END_REG_PARALLEL
+#endif
+    }
     return index;
   }
 

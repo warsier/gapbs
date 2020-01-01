@@ -40,16 +40,29 @@ pvector<ScoreT> PageRankPull(const Graph &g, int max_iters,
   for (int iter=0; iter < max_iters; iter++) {
     double error = 0;
     #pragma omp parallel for
-    for (NodeID n=0; n < g.num_nodes(); n++)
+    for (NodeID n=0; n < g.num_nodes(); n++) {
+#ifdef ZSIM
+  PIMPROF_BEGIN_REG_PARALLEL
+#endif
       outgoing_contrib[n] = scores[n] / g.out_degree(n);
+#ifdef ZSIM
+  PIMPROF_END_REG_PARALLEL
+#endif
+    }
     #pragma omp parallel for reduction(+ : error) schedule(dynamic, 64)
     for (NodeID u=0; u < g.num_nodes(); u++) {
+#ifdef ZSIM
+  PIMPROF_BEGIN_REG_PARALLEL
+#endif
       ScoreT incoming_total = 0;
       for (NodeID v : g.in_neigh(u))
         incoming_total += outgoing_contrib[v];
       ScoreT old_score = scores[u];
       scores[u] = base_score + kDamp * incoming_total;
       error += fabs(scores[u] - old_score);
+#ifdef ZSIM
+  PIMPROF_END_REG_PARALLEL
+#endif
     }
     printf(" %2d    %lf\n", iter, error);
     if (error < epsilon)
@@ -94,6 +107,9 @@ bool PRVerifier(const Graph &g, const pvector<ScoreT> &scores,
 
 
 int main(int argc, char* argv[]) {
+#ifdef ZSIM
+  PIMPROF_BEGIN_PROGRAM
+#endif
   CLPageRank cli(argc, argv, "pagerank", 1e-4, 20);
   if (!cli.ParseArgs())
     return -1;
@@ -106,5 +122,8 @@ int main(int argc, char* argv[]) {
     return PRVerifier(g, scores, cli.tolerance());
   };
   BenchmarkKernel(cli, g, PRBound, PrintTopScores, VerifierBound);
+#ifdef ZSIM
+  PIMPROF_END_PROGRAM
+#endif
   return 0;
 }

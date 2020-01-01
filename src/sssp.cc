@@ -73,6 +73,9 @@ pvector<WeightT> DeltaStep(const WGraph &g, NodeID source, WeightT delta) {
       size_t &next_frontier_tail = frontier_tails[(iter+1)&1];
       #pragma omp for nowait schedule(dynamic, 64)
       for (size_t i=0; i < curr_frontier_tail; i++) {
+#ifdef ZSIM
+  PIMPROF_BEGIN_REG_PARALLEL
+#endif
         NodeID u = frontier[i];
         if (dist[u] >= delta * static_cast<WeightT>(curr_bin_index)) {
           for (WNode wn : g.out_neigh(u)) {
@@ -97,6 +100,9 @@ pvector<WeightT> DeltaStep(const WGraph &g, NodeID source, WeightT delta) {
             }
           }
         }
+#ifdef ZSIM
+  PIMPROF_END_REG_PARALLEL
+#endif
       }
       for (size_t i=curr_bin_index; i < local_bins.size(); i++) {
         if (!local_bins[i].empty()) {
@@ -173,6 +179,9 @@ bool SSSPVerifier(const WGraph &g, NodeID source,
 
 
 int main(int argc, char* argv[]) {
+#ifdef ZSIM
+  PIMPROF_BEGIN_PROGRAM
+#endif
   CLDelta<WeightT> cli(argc, argv, "single-source shortest-path");
   if (!cli.ParseArgs())
     return -1;
@@ -187,5 +196,8 @@ int main(int argc, char* argv[]) {
     return SSSPVerifier(g, vsp.PickNext(), dist);
   };
   BenchmarkKernel(cli, g, SSSPBound, PrintSSSPStats, VerifierBound);
+#ifdef ZSIM
+  PIMPROF_END_PROGRAM
+#endif
   return 0;
 }

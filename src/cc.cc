@@ -104,11 +104,17 @@ pvector<NodeID> Afforest(const Graph &g, int32_t neighbor_rounds = 2) {
   for (int r = 0; r < neighbor_rounds; ++r) {
     #pragma omp parallel for
     for (NodeID u = 0; u < g.num_nodes(); u++) {
+#ifdef ZSIM
+  PIMPROF_BEGIN_REG_PARALLEL
+#endif
       for (NodeID v : g.out_neigh(u, r)) {
         // Link at most one time if neighbor available at offset r
         Link(u, v, comp);
         break;
       }
+#ifdef ZSIM
+  PIMPROF_END_REG_PARALLEL
+#endif
     }
     Compress(g, comp);
   }
@@ -216,6 +222,9 @@ bool CCVerifier(const Graph &g, const pvector<NodeID> &comp) {
 
 
 int main(int argc, char* argv[]) {
+#ifdef ZSIM
+  PIMPROF_BEGIN_PROGRAM
+#endif
   CLApp cli(argc, argv, "connected-components-afforest");
   if (!cli.ParseArgs())
     return -1;
@@ -223,5 +232,8 @@ int main(int argc, char* argv[]) {
   Graph g = b.MakeGraph();
   auto CCBound = [](const Graph& gr){ return Afforest(gr); };
   BenchmarkKernel(cli, g, CCBound, PrintCompStats, CCVerifier);
+#ifdef ZSIM
+  PIMPROF_END_PROGRAM
+#endif
   return 0;
 }

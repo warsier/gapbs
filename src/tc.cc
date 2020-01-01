@@ -48,6 +48,9 @@ size_t OrderedCount(const Graph &g) {
   size_t total = 0;
   #pragma omp parallel for reduction(+ : total) schedule(dynamic, 64)
   for (NodeID u=0; u < g.num_nodes(); u++) {
+#ifdef ZSIM
+  PIMPROF_BEGIN_REG_PARALLEL
+#endif
     for (NodeID v : g.out_neigh(u)) {
       if (v > u)
         break;
@@ -61,6 +64,9 @@ size_t OrderedCount(const Graph &g) {
           total++;
       }
     }
+#ifdef ZSIM
+  PIMPROF_END_REG_PARALLEL
+#endif
   }
   return total;
 }
@@ -124,6 +130,9 @@ bool TCVerifier(const Graph &g, size_t test_total) {
 
 
 int main(int argc, char* argv[]) {
+#ifdef ZSIM
+  PIMPROF_BEGIN_PROGRAM
+#endif
   CLApp cli(argc, argv, "triangle count");
   if (!cli.ParseArgs())
     return -1;
@@ -134,5 +143,8 @@ int main(int argc, char* argv[]) {
     return -2;
   }
   BenchmarkKernel(cli, g, Hybrid, PrintTriangleStats, TCVerifier);
+#ifdef ZSIM
+  PIMPROF_END_PROGRAM
+#endif
   return 0;
 }

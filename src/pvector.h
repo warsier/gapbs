@@ -6,6 +6,10 @@
 
 #include <algorithm>
 
+#ifdef ZSIM
+#include "zsimhooks.h"
+#endif
+
 
 /*
 GAP Benchmark Suite
@@ -39,8 +43,15 @@ class pvector {
   pvector(iterator copy_begin, iterator copy_end)
       : pvector(copy_end - copy_begin) {
     #pragma omp parallel for
-    for (size_t i=0; i < capacity(); i++)
-      start_[i] = copy_begin[i];
+    for (size_t i=0; i < capacity(); i++) {
+#ifdef ZSIM
+  PIMPROF_BEGIN_REG_PARALLEL
+#endif
+    start_[i] = copy_begin[i];
+#ifdef ZSIM
+  PIMPROF_END_REG_PARALLEL
+#endif
+    }
   }
 
   // don't want this to be copied, too much data to move
@@ -117,8 +128,15 @@ class pvector {
 
   void fill(T_ init_val) {
     #pragma omp parallel for
-    for (T_* ptr=start_; ptr < end_size_; ptr++)
+    for (T_* ptr=start_; ptr < end_size_; ptr++) {
+#ifdef ZSIM
+  PIMPROF_BEGIN_REG_PARALLEL
+#endif
       *ptr = init_val;
+#ifdef ZSIM
+  PIMPROF_END_REG_PARALLEL
+#endif
+    }
   }
 
   size_t capacity() const {
